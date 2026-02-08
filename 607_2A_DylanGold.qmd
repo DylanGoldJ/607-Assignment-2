@@ -1,0 +1,13 @@
+---
+title: "607Assignment2A Dylan Gold"
+format: html
+editor: visual
+---
+
+## 607 Assignment 2A Dylan Gold
+
+# Approach
+
+In this assignment we are loading a SQL database into R after populating it with our data about ratings of media 1-5 that we collect. I will collect the data by asking some people in real life, maybe if I have time Ill make a google forum then post it somewhere. I will probably use movies or a show or videos games as the topic. I will be sure to take down if they have not consumed the media in my data set. After populating a postgreSQL database I will probably export it into a csv to work with in R.
+
+Even through its seems like overkill to use relational database structure for this I will do it for the assignment. I will have 2 tables, users(user_id, name) and ratings(user_id, media, rating)

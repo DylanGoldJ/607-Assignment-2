@@ -1,0 +1,194 @@
+---
+title: "607Assignment2B Dylan Gold"
+format: html
+editor: visual
+---
+
+## 607 Assignment 2B Dylan Gold
+
+# Approach:
+
+In this assignment we are analyzing the performance of a binary classification model. I will get the csv files that have the classifications from the github. The Raw is at https://raw.githubusercontent.com/acatlin/data/refs/heads/master/penguin_predictions.csv. I read the pdf file also linked in the assignment. I believe that accuracy will be a good metric to rate this model because the data has a lot of both the (1) and (0), female and male samples. Depending on how the model is we can use either the arithmetic or harmonic mean for the F1 score. My hunch is that arithmetic may be alright unless the model is really bad.
+
+I plan to follow along with the steps provided in the assignment. Get the wrong rate for null error rate, create confusion matrices at different thresholds. Calculate the F1 score and Accuracy create graphs to show this data etc.
+
+In a vacuum I would guess .5 threshold is probably good for this given that the population is probably 50/50 as well. We want a lower threshold when we don't mind saying some guys are girls and a higher threshold when we don't mind missing some girls. For example lower threshold, sending mail to women for an ad for some feminine hygiene cause we want to make sure to get all the girls even if we get some guys. For example higher threshold, we are sending medication to all the girls on something and we really don't want to accidentally send medication to the men even if we miss some girls.
+
+# Codebase:
+
+## Setting up
+
+First I will load tidyverse, ggplot2 and gt, then get a look at the database we are dealing with after loading it in.
+
+```{r , message=FALSE, warning=FALSE}
+library(tidyverse)
+library(ggplot2)
+library(gt)
+```
+
+```{r, warning=FALSE}
+url <- "https://raw.githubusercontent.com/acatlin/data/refs/heads/master/penguin_predictions.csv"
+
+df <- read_csv(
+  file = url,
+  show_col_types = FALSE
+)
+
+head(df, 10)
+```
+
+We can see we have the prediction, followed by the prediction class then the actual sex of the subject. I will just rename the columns to remove the period.
+
+```{r}
+names(df)[names(df) == '.pred_female'] <- 'pred_female'
+names(df)[names(df) == '.pred_class'] <- 'pred_class'
+```
+
+## Null Error Rate
+
+Lets get the null error rate. We need to see how many times the classifier was incorrect. Get the sum of predicted males for this aswell as the total number of rows, then get the ratio.
+
+```{r}
+num_pred_male = sum(df$pred_class == "male") 
+num_total = count(df)$n
+
+null_error_rate = num_pred_male/num_total
+null_error_rate
+```
+
+We see that the null error rate is greater than 50 here. Because the null error rate is based off the majority class and we have more males than females we should actually use the the predicted females as our numerator.
+
+```{r}
+num_pred_female = sum(df$pred_class == "female") 
+null_error_rate = num_pred_female/num_total
+null_error_rate
+```
+
+Lets show a chart for the distribution of actual sex. I thought a pie chart would be the best to show this kind of percentage. I used ggplot2's library for this.
+
+```{r}
+graph_data = df %>% count(sex)
+
+ggplot(graph_data, aes(x="", y= n, fill=sex)) +
+  geom_bar(stat="identity", width=1) +
+  coord_polar("y", start=0)
+```
+
+I will add percentage, title and remove unnecessary things.
+
+```{r}
+ggplot(graph_data, aes(x="", y= n, fill=sex)) +
+  geom_bar(stat="identity", width=1) +
+  coord_polar("y", start=0) +
+  theme_void() +
+  geom_text(aes(label = scales::percent(n/num_total)),
+            position = position_stack(vjust = 0.5)) +
+  ggtitle("Distribution of Sex")
+```
+
+We now have a graphic for our distribution. We can see that our null error rate is the same as the female distribution. This makes sense. If our classification model were to just guess the majority class (male) every single time then it would be incorrect 42% of the time. This is important because it serves as a baseline for our model. If our model can not do better than this then it is a very poor model that is worse off than just guessing the majority.
+
+## Confusion Matrix
+
+We can now assess the model at different thresholds using a confusion matrix. I will attempt to create a function for this so we can recreate the values at different thresholds. I am not certain how side effects work with functions in R but I will try to just create copies of data frames or something.
+
+```{r}
+create_cm <- function(df, threshold) {
+  copy_df <- df
+  copy_df <- copy_df %>% mutate(
+    new_pred = if_else(pred_female >= threshold,"female", "male")) #Create new prediction column based on threshold
+  TP <- sum(copy_df$new_pred == "female" & copy_df$sex == "female") # True Positives
+  TN <- sum(copy_df$new_pred == "male" & copy_df$sex == "male") # True Negatives
+  FP <- sum(copy_df$new_pred == "female" & copy_df$sex == "male") # False Positives
+  FN <- sum(copy_df$new_pred == "male" & copy_df$sex == "female") # False Negatives
+  return_vector <- c(TP, TN, FP, FN)
+  return(return_vector)
+}
+```
+
+Now that we have the function we can use it to create a confusion matrix. The function returns the true positives, true negatives, false positives, false negatives, in that order as a vector.
+
+We can create a table for each threshold from this information.
+
+```{r}
+
+confusion_vector_.2 <- create_cm(df, .2)
+confusion_vector_.5 <- create_cm(df, .5)
+confusion_vector_.8 <- create_cm(df, .8)
+
+create_confusion_table <- function(v, threshold){ #Input confusion vector, and Threshold for table subheader
+  con_table <- data.frame(
+                          "Predicted" = c ("Predicted_Female", "Predicted_Male"), #Left header row
+                          "Actual_Female" = c(v[1], v[4]), 
+                          "Actual_Male" = c(v[3], v[2]))
+  gt(con_table, row_group_as_column = TRUE,rowname_col = "Predicted")|>
+    tab_header(
+      title = md("Confusion Matrix"),
+      subtitle = md(paste("Threshold: ", threshold))
+    )
+}
+
+create_confusion_table(confusion_vector_.2, .2)
+```
+
+```{r}
+create_confusion_table(confusion_vector_.5, .5)
+```
+
+```{r}
+create_confusion_table(confusion_vector_.8, .8)
+```
+
+## Performance Metrics
+
+We can get the performance metrics from this now that we have a confusion matrix. I will create a function that will return a vector of the metrics when given the confusion vector from earlier.
+
+```{r}
+get_metrics <- function(v){
+  #Format of v is TP, TN, FP, FN
+  TP <- v[1]
+  TN <- v[2]
+  FP <- v[3]
+  FN <- v[4]
+  
+  total = sum(v)
+  acc <- (TP + TN)/ total
+  pre <- TP/(TP + FP) 
+  rec <- TP/(TP + FN)
+  F1 <- (2 * pre * rec)/(pre + rec) #Harmonic mean
+  
+  return(c(acc, pre, rec, F1))
+}
+
+metrics_.2 <- get_metrics(confusion_vector_.2)
+metrics_.5 <- get_metrics(confusion_vector_.5)
+metrics_.8 <- get_metrics(confusion_vector_.8)
+threshold_values <- c(.2, .5, .8)
+
+metrics_table <- rbind(metrics_.2,metrics_.5, metrics_.8) # Convert rows to a matrix
+
+metrics_table <- as.data.frame(metrics_table) %>%  # Matrix to a data frame
+  mutate(Thresholds = threshold_values) %>% # Add thresholds
+  relocate(Thresholds) # Move first
+
+
+names(metrics_table)[names(metrics_table) == 'V1'] <- 'Accuracy'
+names(metrics_table)[names(metrics_table) == 'V2'] <- 'Precision'
+names(metrics_table)[names(metrics_table) == 'V3'] <- 'Recall'
+names(metrics_table)[names(metrics_table) == 'V4'] <- 'F1 Score'
+gt(metrics_table)|>
+    tab_header(
+      title = md("Performance Metrics"),
+    )
+
+```
+
+We can see all the performance metrics for our 3 different thresholds.
+
+## Scenario examples:
+
+Depending on the context, we may prefer different thresholds. I will reuse my examples in the approach.
+
+We can consider a scenario where we would prefer to have a lower threshold. This would make it so it is more likely we false flag a man as a woman but we would also be more likely to properly get all females. An example could be we are sending junk mail advertisements to women for a beauty product or something. While we might prefer to just get females we would not mind sending the mail to men as well.
+
+We can consider a scenario where we would prefer to have a higher threshold. This would make it so we are more likely to not flag a man as a woman but we may miss out on catching all the females. An example this could be helpful is if we were actually sending a limited sample to customers for a product designed for females. Because we could have a limited sample we would want to be more careful about who we send the product to and we prefer to send it to less people overall if it means we don't accidentally send it to men who are unlikely to buy/use the product.
