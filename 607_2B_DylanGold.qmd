@@ -192,3 +192,8 @@ Depending on the context, we may prefer different thresholds. I will reuse my ex
 We can consider a scenario where we would prefer to have a lower threshold. This would make it so it is more likely we false flag a man as a woman but we would also be more likely to properly get all females. An example could be we are sending junk mail advertisements to women for a beauty product or something. While we might prefer to just get females we would not mind sending the mail to men as well.
 
 We can consider a scenario where we would prefer to have a higher threshold. This would make it so we are more likely to not flag a man as a woman but we may miss out on catching all the females. An example this could be helpful is if we were actually sending a limited sample to customers for a product designed for females. Because we could have a limited sample we would want to be more careful about who we send the product to and we prefer to send it to less people overall if it means we don't accidentally send it to men who are unlikely to buy/use the product.
+
+Overall for this model it performed pretty well under all thresholds. It has the highest 
+
+# Conclusion
+In this assignment I was able to get hands on experience with analyzing the performance of a binary classification model. I was able to create functions that let me get different metrics for the performance of a model. By creating confusion matrices we could see exactly how well the model did at different thresholds. I would be curious to try this kind of analysis on non-binary models. I still also don't know much about how to create the model itself so I could maybe try to make a binary model and perform this kind of analysis on it as well. 
