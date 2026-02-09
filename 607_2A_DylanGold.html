@@ -20,6 +20,41 @@ ul.task-list li input[type="checkbox"] {
   margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
   vertical-align: middle;
 }
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
 </style>
 
 
@@ -71,6 +106,1676 @@ ul.task-list li input[type="checkbox"] {
 <h1>Approach</h1>
 <p>In this assignment we are loading a SQL database into R after populating it with our data about ratings of media 1-5 that we collect. I will collect the data by asking some people in real life, maybe if I have time Ill make a google forum then post it somewhere. I will probably use movies or a show or videos games as the topic. I will be sure to take down if they have not consumed the media in my data set. After populating a postgreSQL database I will probably export it into a csv to work with in R.</p>
 <p>Even through its seems like overkill to use relational database structure for this I will do it for the assignment. I will have 2 tables, users(user_id, name) and ratings(user_id, media, rating)</p>
+</section>
+<section id="codebase" class="level1">
+<h1>Codebase:</h1>
+<section id="getting-started" class="level2">
+<h2 class="anchored" data-anchor-id="getting-started">Getting Started</h2>
+<p>Initially I was thinking about using a survey and I posted one somewhere but after checking in a bit 0 people responded. I then went to ask my friends what they thought about some shows that I am curious about or that I think are popular and I ended up getting a few responses.</p>
+</section>
+<section id="planning-the-sql-schema." class="level2">
+<h2 class="anchored" data-anchor-id="planning-the-sql-schema.">Planning the SQL schema.</h2>
+<p>After gather the results I basically had a name, show, and rating for 5 different people. Rating could be null I will create 3 tables to show this. users(user_id, name), reviews(review_id, rating,show_id, user_id), shows(show_id, title). The user_id will be the primary key for the users as well as a foreign key for the reviews. The show_id will be the primary key for the shows as well as a foreign key for reviews. The review_id will be the primary key for the reviews. This is the schema suggested in the assignment. I wanted to shorten it to 2 tables but it just made more sense to make 3 tables due to the many to many relationship aswell as possiblity for duplicate names and such.</p>
+</section>
+<section id="creating-the-sql-tables" class="level2">
+<h2 class="anchored" data-anchor-id="creating-the-sql-tables">Creating the SQL tables</h2>
+<p>The following lines of SQL code were used to create my tables based on the information above. I struggled a little because I did not know about serial and I was trying to use AUTO_INCREMENT from my previous experience.</p>
+<pre><code>CREATE TABLE users(
+    user_id SERIAL PRIMARY KEY,
+    name varchar(20) NOT NULL
+);
+CREATE TABLE shows(
+    show_id SERIAL PRIMARY KEY,
+    title varchar(100) NOT NULL
+);
+CREATE TABLE reviews(
+    review_id SERIAL PRIMARY KEY,
+    user_id INT REFERENCES users(user_id),
+    show_id INT REFERENCES shows(show_id),
+    review INT 
+);</code></pre>
+</section>
+<section id="inserting-data" class="level2">
+<h2 class="anchored" data-anchor-id="inserting-data">Inserting Data</h2>
+<p>I then inserted the information for the shows and users tables with the following code.</p>
+<pre><code>INSERT INTO users(name) VALUES ('Jonah'), ('Ethan'), ('Alan'), ('Dylan'), ('Mark');
+
+INSERT INTO shows(title) VALUES ('Demon Slayer'), ('Breaking Bad'), ('Attack on Titan'), ('Dexter'), ('Invincible'), ('Dragonball Z');</code></pre>
+<p>Then I inserted the data for everyone’s reviews, this was pretty tedious because I did it manually. If someone did not see a show yet I did not insert a review at this stage. It seemed reasonable to not insert a review for our null values. We could create null values later in R if we wanted. Because I manually inserted the information it made a lot of sense to just skip those values.</p>
+<pre><code>INSERT INTO reviews(user_id, show_id, review)
+VALUES 
+(1, 1, 3),
+(1, 2, 5),
+(1, 3, 3), 
+(1, 5, 4), 
+(2, 1, 4), 
+(2, 2, 5), 
+(2, 4, 4),
+(3, 1, 4), 
+(3, 3, 4), 
+(3, 6, 5),
+(4, 1, 4),
+(4, 2, 5),
+(4, 3, 5),
+(4, 4, 4),
+(4, 5, 4),
+(5, 2, 4),
+(5, 5, 3),
+(5, 6, 4);</code></pre>
+<p>Now that I had the table I need to create a query that would join the tables back together, then copy it to a csv that I could export to github and bring here to display in R. I use the JOIN statements to join the tables for this query I use an inner join and I join on the foreign keys that I mentioned earlier. I can use USING because they are the same name in the tables.</p>
+<p>I want to display the name, title, and review.</p>
+<pre><code>SELECT name, title, review
+FROM reviews
+INNER JOIN users USING(user_id)
+INNER JOIN shows USING(show_id);</code></pre>
+<p>Once the table shows up I click on the “Save results to file” button in the Data Output section of pgAdmin. I then save the results to this directory under ReviewData.csv.</p>
+</section>
+<section id="r-analysis" class="level2">
+<h2 class="anchored" data-anchor-id="r-analysis">R Analysis</h2>
+<p>We now have the csv that we can generate graphics for and such. I will first load the library</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(tidyverse)</span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(ggplot2)</span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(gt)</span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(tidyr) <span class="co">#For the complete function used later</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p>As well as load in the csv.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>url <span class="ot">&lt;-</span> <span class="st">"https://raw.githubusercontent.com/DylanGoldJ/607-Assignment-2/refs/heads/main/ReviewData.csv"</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>df <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(</span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">file =</span> url,</span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">show_col_types =</span> <span class="cn">FALSE</span></span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a><span class="fu">head</span>(df, <span class="dv">10</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code># A tibble: 10 × 3
+   name  title           review
+   &lt;chr&gt; &lt;chr&gt;            &lt;dbl&gt;
+ 1 Jonah Demon Slayer         3
+ 2 Jonah Breaking Bad         5
+ 3 Jonah Attack on Titan      3
+ 4 Jonah Invincible           4
+ 5 Ethan Demon Slayer         4
+ 6 Ethan Breaking Bad         5
+ 7 Ethan Dexter               4
+ 8 Alan  Demon Slayer         4
+ 9 Alan  Attack on Titan      4
+10 Alan  Dragonball Z         5</code></pre>
+</div>
+</div>
+<p>We can use a function from tidyr to complete our data given how our csv does not have a lot of the reviews.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>df <span class="ot">&lt;-</span> df <span class="sc">%&gt;%</span> <span class="fu">complete</span>(name, title)</span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>df</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code># A tibble: 30 × 3
+   name  title           review
+   &lt;chr&gt; &lt;chr&gt;            &lt;dbl&gt;
+ 1 Alan  Attack on Titan      4
+ 2 Alan  Breaking Bad        NA
+ 3 Alan  Demon Slayer         4
+ 4 Alan  Dexter              NA
+ 5 Alan  Dragonball Z         5
+ 6 Alan  Invincible          NA
+ 7 Dylan Attack on Titan      5
+ 8 Dylan Breaking Bad         5
+ 9 Dylan Demon Slayer         4
+10 Dylan Dexter               4
+# ℹ 20 more rows</code></pre>
+</div>
+</div>
+<p>We see our review data is now in R to further explore. Lets start off with grouping the data both by name and by title.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>df_group_title <span class="ot">&lt;-</span> df <span class="sc">%&gt;%</span> <span class="fu">group_by</span>(title) </span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>df_group_name <span class="ot">&lt;-</span> df <span class="sc">%&gt;%</span> <span class="fu">group_by</span>(name)</span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>df_group_title </span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code># A tibble: 30 × 3
+# Groups:   title [6]
+   name  title           review
+   &lt;chr&gt; &lt;chr&gt;            &lt;dbl&gt;
+ 1 Alan  Attack on Titan      4
+ 2 Alan  Breaking Bad        NA
+ 3 Alan  Demon Slayer         4
+ 4 Alan  Dexter              NA
+ 5 Alan  Dragonball Z         5
+ 6 Alan  Invincible          NA
+ 7 Dylan Attack on Titan      5
+ 8 Dylan Breaking Bad         5
+ 9 Dylan Demon Slayer         4
+10 Dylan Dexter               4
+# ℹ 20 more rows</code></pre>
+</div>
+</div>
+<p>According to ?group_by(), the data will display the same but now we can run certain functions based on the grouping I will get the average rating of each show. Then we can sort it as well. We also set the removal of na to true otherwise we would get NA. We can also sort it by Avg Rating.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a>df_group_title_avg <span class="ot">&lt;-</span>df_group_title <span class="sc">%&gt;%</span> <span class="fu">summarize</span>(</span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>  <span class="st">'Avg Rating'</span> <span class="ot">=</span> <span class="fu">mean</span>(review, <span class="at">na.rm =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a><span class="fu">gt</span>(df_group_title_avg) <span class="sc">%&gt;%</span> <span class="fu">tab_header</span>(</span>
+<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a>      <span class="at">title =</span> <span class="fu">md</span>(<span class="st">"Average Rating of Shows"</span>)</span>
+<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a>      )</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div id="jyoaivcrar" style="padding-left:0px;padding-right:0px;padding-top:10px;padding-bottom:10px;overflow-x:auto;overflow-y:auto;width:auto;height:auto;">
+<style>#jyoaivcrar table {
+  font-family: system-ui, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#jyoaivcrar thead, #jyoaivcrar tbody, #jyoaivcrar tfoot, #jyoaivcrar tr, #jyoaivcrar td, #jyoaivcrar th {
+  border-style: none;
+}
+
+#jyoaivcrar p {
+  margin: 0;
+  padding: 0;
+}
+
+#jyoaivcrar .gt_table {
+  display: table;
+  border-collapse: collapse;
+  line-height: normal;
+  margin-left: auto;
+  margin-right: auto;
+  color: #333333;
+  font-size: 16px;
+  font-weight: normal;
+  font-style: normal;
+  background-color: #FFFFFF;
+  width: auto;
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #A8A8A8;
+  border-right-style: none;
+  border-right-width: 2px;
+  border-right-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #A8A8A8;
+  border-left-style: none;
+  border-left-width: 2px;
+  border-left-color: #D3D3D3;
+}
+
+#jyoaivcrar .gt_caption {
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+
+#jyoaivcrar .gt_title {
+  color: #333333;
+  font-size: 125%;
+  font-weight: initial;
+  padding-top: 4px;
+  padding-bottom: 4px;
+  padding-left: 5px;
+  padding-right: 5px;
+  border-bottom-color: #FFFFFF;
+  border-bottom-width: 0;
+}
+
+#jyoaivcrar .gt_subtitle {
+  color: #333333;
+  font-size: 85%;
+  font-weight: initial;
+  padding-top: 3px;
+  padding-bottom: 5px;
+  padding-left: 5px;
+  padding-right: 5px;
+  border-top-color: #FFFFFF;
+  border-top-width: 0;
+}
+
+#jyoaivcrar .gt_heading {
+  background-color: #FFFFFF;
+  text-align: center;
+  border-bottom-color: #FFFFFF;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+}
+
+#jyoaivcrar .gt_bottom_border {
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+}
+
+#jyoaivcrar .gt_col_headings {
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+}
+
+#jyoaivcrar .gt_col_heading {
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: normal;
+  text-transform: inherit;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+  vertical-align: bottom;
+  padding-top: 5px;
+  padding-bottom: 6px;
+  padding-left: 5px;
+  padding-right: 5px;
+  overflow-x: hidden;
+}
+
+#jyoaivcrar .gt_column_spanner_outer {
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: normal;
+  text-transform: inherit;
+  padding-top: 0;
+  padding-bottom: 0;
+  padding-left: 4px;
+  padding-right: 4px;
+}
+
+#jyoaivcrar .gt_column_spanner_outer:first-child {
+  padding-left: 0;
+}
+
+#jyoaivcrar .gt_column_spanner_outer:last-child {
+  padding-right: 0;
+}
+
+#jyoaivcrar .gt_column_spanner {
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  vertical-align: bottom;
+  padding-top: 5px;
+  padding-bottom: 5px;
+  overflow-x: hidden;
+  display: inline-block;
+  width: 100%;
+}
+
+#jyoaivcrar .gt_spanner_row {
+  border-bottom-style: hidden;
+}
+
+#jyoaivcrar .gt_group_heading {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: initial;
+  text-transform: inherit;
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+  vertical-align: middle;
+  text-align: left;
+}
+
+#jyoaivcrar .gt_empty_group_heading {
+  padding: 0.5px;
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: initial;
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  vertical-align: middle;
+}
+
+#jyoaivcrar .gt_from_md > :first-child {
+  margin-top: 0;
+}
+
+#jyoaivcrar .gt_from_md > :last-child {
+  margin-bottom: 0;
+}
+
+#jyoaivcrar .gt_row {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+  margin: 10px;
+  border-top-style: solid;
+  border-top-width: 1px;
+  border-top-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+  vertical-align: middle;
+  overflow-x: hidden;
+}
+
+#jyoaivcrar .gt_stub {
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: initial;
+  text-transform: inherit;
+  border-right-style: solid;
+  border-right-width: 2px;
+  border-right-color: #D3D3D3;
+  padding-left: 5px;
+  padding-right: 5px;
+}
+
+#jyoaivcrar .gt_stub_row_group {
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: initial;
+  text-transform: inherit;
+  border-right-style: solid;
+  border-right-width: 2px;
+  border-right-color: #D3D3D3;
+  padding-left: 5px;
+  padding-right: 5px;
+  vertical-align: top;
+}
+
+#jyoaivcrar .gt_row_group_first td {
+  border-top-width: 2px;
+}
+
+#jyoaivcrar .gt_row_group_first th {
+  border-top-width: 2px;
+}
+
+#jyoaivcrar .gt_summary_row {
+  color: #333333;
+  background-color: #FFFFFF;
+  text-transform: inherit;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+}
+
+#jyoaivcrar .gt_first_summary_row {
+  border-top-style: solid;
+  border-top-color: #D3D3D3;
+}
+
+#jyoaivcrar .gt_first_summary_row.thick {
+  border-top-width: 2px;
+}
+
+#jyoaivcrar .gt_last_summary_row {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+}
+
+#jyoaivcrar .gt_grand_summary_row {
+  color: #333333;
+  background-color: #FFFFFF;
+  text-transform: inherit;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+}
+
+#jyoaivcrar .gt_first_grand_summary_row {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+  border-top-style: double;
+  border-top-width: 6px;
+  border-top-color: #D3D3D3;
+}
+
+#jyoaivcrar .gt_last_grand_summary_row_top {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+  border-bottom-style: double;
+  border-bottom-width: 6px;
+  border-bottom-color: #D3D3D3;
+}
+
+#jyoaivcrar .gt_striped {
+  background-color: rgba(128, 128, 128, 0.05);
+}
+
+#jyoaivcrar .gt_table_body {
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+}
+
+#jyoaivcrar .gt_footnotes {
+  color: #333333;
+  background-color: #FFFFFF;
+  border-bottom-style: none;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 2px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 2px;
+  border-right-color: #D3D3D3;
+}
+
+#jyoaivcrar .gt_footnote {
+  margin: 0px;
+  font-size: 90%;
+  padding-top: 4px;
+  padding-bottom: 4px;
+  padding-left: 5px;
+  padding-right: 5px;
+}
+
+#jyoaivcrar .gt_sourcenotes {
+  color: #333333;
+  background-color: #FFFFFF;
+  border-bottom-style: none;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 2px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 2px;
+  border-right-color: #D3D3D3;
+}
+
+#jyoaivcrar .gt_sourcenote {
+  font-size: 90%;
+  padding-top: 4px;
+  padding-bottom: 4px;
+  padding-left: 5px;
+  padding-right: 5px;
+}
+
+#jyoaivcrar .gt_left {
+  text-align: left;
+}
+
+#jyoaivcrar .gt_center {
+  text-align: center;
+}
+
+#jyoaivcrar .gt_right {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+#jyoaivcrar .gt_font_normal {
+  font-weight: normal;
+}
+
+#jyoaivcrar .gt_font_bold {
+  font-weight: bold;
+}
+
+#jyoaivcrar .gt_font_italic {
+  font-style: italic;
+}
+
+#jyoaivcrar .gt_super {
+  font-size: 65%;
+}
+
+#jyoaivcrar .gt_footnote_marks {
+  font-size: 75%;
+  vertical-align: 0.4em;
+  position: initial;
+}
+
+#jyoaivcrar .gt_asterisk {
+  font-size: 100%;
+  vertical-align: 0;
+}
+
+#jyoaivcrar .gt_indent_1 {
+  text-indent: 5px;
+}
+
+#jyoaivcrar .gt_indent_2 {
+  text-indent: 10px;
+}
+
+#jyoaivcrar .gt_indent_3 {
+  text-indent: 15px;
+}
+
+#jyoaivcrar .gt_indent_4 {
+  text-indent: 20px;
+}
+
+#jyoaivcrar .gt_indent_5 {
+  text-indent: 25px;
+}
+
+#jyoaivcrar .katex-display {
+  display: inline-flex !important;
+  margin-bottom: 0.75em !important;
+}
+
+#jyoaivcrar div.Reactable > div.rt-table > div.rt-thead > div.rt-tr.rt-tr-group-header > div.rt-th-group:after {
+  height: 0px !important;
+}
+</style>
+
+<table class="gt_table caption-top table table-sm table-striped small" data-quarto-bootstrap="false">
+<thead>
+<tr class="gt_heading header">
+<td colspan="2" class="gt_heading gt_title gt_font_normal gt_bottom_border">Average Rating of Shows</td>
+</tr>
+<tr class="gt_col_headings even">
+<th id="title" class="gt_col_heading gt_columns_bottom_border gt_left" data-quarto-table-cell-role="th" scope="col">title</th>
+<th id="Avg-Rating" class="gt_col_heading gt_columns_bottom_border gt_right" data-quarto-table-cell-role="th" scope="col">Avg Rating</th>
+</tr>
+</thead>
+<tbody class="gt_table_body">
+<tr class="odd">
+<td class="gt_row gt_left" headers="title">Attack on Titan</td>
+<td class="gt_row gt_right" headers="Avg Rating">4.000000</td>
+</tr>
+<tr class="even">
+<td class="gt_row gt_left" headers="title">Breaking Bad</td>
+<td class="gt_row gt_right" headers="Avg Rating">4.750000</td>
+</tr>
+<tr class="odd">
+<td class="gt_row gt_left" headers="title">Demon Slayer</td>
+<td class="gt_row gt_right" headers="Avg Rating">3.750000</td>
+</tr>
+<tr class="even">
+<td class="gt_row gt_left" headers="title">Dexter</td>
+<td class="gt_row gt_right" headers="Avg Rating">4.000000</td>
+</tr>
+<tr class="odd">
+<td class="gt_row gt_left" headers="title">Dragonball Z</td>
+<td class="gt_row gt_right" headers="Avg Rating">4.500000</td>
+</tr>
+<tr class="even">
+<td class="gt_row gt_left" headers="title">Invincible</td>
+<td class="gt_row gt_right" headers="Avg Rating">3.666667</td>
+</tr>
+</tbody>
+</table>
+
+</div>
+</div>
+</div>
+<p>We can also see each persons average score</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb13"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a>df_group_name_avg <span class="ot">&lt;-</span>df_group_name <span class="sc">%&gt;%</span> <span class="fu">summarize</span>(</span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a><span class="st">'Avg Rating'</span> <span class="ot">=</span> <span class="fu">mean</span>(review, <span class="at">na.rm =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a><span class="fu">gt</span>(df_group_name_avg) <span class="sc">%&gt;%</span> <span class="fu">tab_header</span>(</span>
+<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a>      <span class="at">title =</span> <span class="fu">md</span>(<span class="st">"Average Rating of Individuals"</span>)</span>
+<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a>      )</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div id="bpsqbznzpl" style="padding-left:0px;padding-right:0px;padding-top:10px;padding-bottom:10px;overflow-x:auto;overflow-y:auto;width:auto;height:auto;">
+<style>#bpsqbznzpl table {
+  font-family: system-ui, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#bpsqbznzpl thead, #bpsqbznzpl tbody, #bpsqbznzpl tfoot, #bpsqbznzpl tr, #bpsqbznzpl td, #bpsqbznzpl th {
+  border-style: none;
+}
+
+#bpsqbznzpl p {
+  margin: 0;
+  padding: 0;
+}
+
+#bpsqbznzpl .gt_table {
+  display: table;
+  border-collapse: collapse;
+  line-height: normal;
+  margin-left: auto;
+  margin-right: auto;
+  color: #333333;
+  font-size: 16px;
+  font-weight: normal;
+  font-style: normal;
+  background-color: #FFFFFF;
+  width: auto;
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #A8A8A8;
+  border-right-style: none;
+  border-right-width: 2px;
+  border-right-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #A8A8A8;
+  border-left-style: none;
+  border-left-width: 2px;
+  border-left-color: #D3D3D3;
+}
+
+#bpsqbznzpl .gt_caption {
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+
+#bpsqbznzpl .gt_title {
+  color: #333333;
+  font-size: 125%;
+  font-weight: initial;
+  padding-top: 4px;
+  padding-bottom: 4px;
+  padding-left: 5px;
+  padding-right: 5px;
+  border-bottom-color: #FFFFFF;
+  border-bottom-width: 0;
+}
+
+#bpsqbznzpl .gt_subtitle {
+  color: #333333;
+  font-size: 85%;
+  font-weight: initial;
+  padding-top: 3px;
+  padding-bottom: 5px;
+  padding-left: 5px;
+  padding-right: 5px;
+  border-top-color: #FFFFFF;
+  border-top-width: 0;
+}
+
+#bpsqbznzpl .gt_heading {
+  background-color: #FFFFFF;
+  text-align: center;
+  border-bottom-color: #FFFFFF;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+}
+
+#bpsqbznzpl .gt_bottom_border {
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+}
+
+#bpsqbznzpl .gt_col_headings {
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+}
+
+#bpsqbznzpl .gt_col_heading {
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: normal;
+  text-transform: inherit;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+  vertical-align: bottom;
+  padding-top: 5px;
+  padding-bottom: 6px;
+  padding-left: 5px;
+  padding-right: 5px;
+  overflow-x: hidden;
+}
+
+#bpsqbznzpl .gt_column_spanner_outer {
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: normal;
+  text-transform: inherit;
+  padding-top: 0;
+  padding-bottom: 0;
+  padding-left: 4px;
+  padding-right: 4px;
+}
+
+#bpsqbznzpl .gt_column_spanner_outer:first-child {
+  padding-left: 0;
+}
+
+#bpsqbznzpl .gt_column_spanner_outer:last-child {
+  padding-right: 0;
+}
+
+#bpsqbznzpl .gt_column_spanner {
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  vertical-align: bottom;
+  padding-top: 5px;
+  padding-bottom: 5px;
+  overflow-x: hidden;
+  display: inline-block;
+  width: 100%;
+}
+
+#bpsqbznzpl .gt_spanner_row {
+  border-bottom-style: hidden;
+}
+
+#bpsqbznzpl .gt_group_heading {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: initial;
+  text-transform: inherit;
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+  vertical-align: middle;
+  text-align: left;
+}
+
+#bpsqbznzpl .gt_empty_group_heading {
+  padding: 0.5px;
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: initial;
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  vertical-align: middle;
+}
+
+#bpsqbznzpl .gt_from_md > :first-child {
+  margin-top: 0;
+}
+
+#bpsqbznzpl .gt_from_md > :last-child {
+  margin-bottom: 0;
+}
+
+#bpsqbznzpl .gt_row {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+  margin: 10px;
+  border-top-style: solid;
+  border-top-width: 1px;
+  border-top-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+  vertical-align: middle;
+  overflow-x: hidden;
+}
+
+#bpsqbznzpl .gt_stub {
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: initial;
+  text-transform: inherit;
+  border-right-style: solid;
+  border-right-width: 2px;
+  border-right-color: #D3D3D3;
+  padding-left: 5px;
+  padding-right: 5px;
+}
+
+#bpsqbznzpl .gt_stub_row_group {
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: initial;
+  text-transform: inherit;
+  border-right-style: solid;
+  border-right-width: 2px;
+  border-right-color: #D3D3D3;
+  padding-left: 5px;
+  padding-right: 5px;
+  vertical-align: top;
+}
+
+#bpsqbznzpl .gt_row_group_first td {
+  border-top-width: 2px;
+}
+
+#bpsqbznzpl .gt_row_group_first th {
+  border-top-width: 2px;
+}
+
+#bpsqbznzpl .gt_summary_row {
+  color: #333333;
+  background-color: #FFFFFF;
+  text-transform: inherit;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+}
+
+#bpsqbznzpl .gt_first_summary_row {
+  border-top-style: solid;
+  border-top-color: #D3D3D3;
+}
+
+#bpsqbznzpl .gt_first_summary_row.thick {
+  border-top-width: 2px;
+}
+
+#bpsqbznzpl .gt_last_summary_row {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+}
+
+#bpsqbznzpl .gt_grand_summary_row {
+  color: #333333;
+  background-color: #FFFFFF;
+  text-transform: inherit;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+}
+
+#bpsqbznzpl .gt_first_grand_summary_row {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+  border-top-style: double;
+  border-top-width: 6px;
+  border-top-color: #D3D3D3;
+}
+
+#bpsqbznzpl .gt_last_grand_summary_row_top {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+  border-bottom-style: double;
+  border-bottom-width: 6px;
+  border-bottom-color: #D3D3D3;
+}
+
+#bpsqbznzpl .gt_striped {
+  background-color: rgba(128, 128, 128, 0.05);
+}
+
+#bpsqbznzpl .gt_table_body {
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+}
+
+#bpsqbznzpl .gt_footnotes {
+  color: #333333;
+  background-color: #FFFFFF;
+  border-bottom-style: none;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 2px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 2px;
+  border-right-color: #D3D3D3;
+}
+
+#bpsqbznzpl .gt_footnote {
+  margin: 0px;
+  font-size: 90%;
+  padding-top: 4px;
+  padding-bottom: 4px;
+  padding-left: 5px;
+  padding-right: 5px;
+}
+
+#bpsqbznzpl .gt_sourcenotes {
+  color: #333333;
+  background-color: #FFFFFF;
+  border-bottom-style: none;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 2px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 2px;
+  border-right-color: #D3D3D3;
+}
+
+#bpsqbznzpl .gt_sourcenote {
+  font-size: 90%;
+  padding-top: 4px;
+  padding-bottom: 4px;
+  padding-left: 5px;
+  padding-right: 5px;
+}
+
+#bpsqbznzpl .gt_left {
+  text-align: left;
+}
+
+#bpsqbznzpl .gt_center {
+  text-align: center;
+}
+
+#bpsqbznzpl .gt_right {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+#bpsqbznzpl .gt_font_normal {
+  font-weight: normal;
+}
+
+#bpsqbznzpl .gt_font_bold {
+  font-weight: bold;
+}
+
+#bpsqbznzpl .gt_font_italic {
+  font-style: italic;
+}
+
+#bpsqbznzpl .gt_super {
+  font-size: 65%;
+}
+
+#bpsqbznzpl .gt_footnote_marks {
+  font-size: 75%;
+  vertical-align: 0.4em;
+  position: initial;
+}
+
+#bpsqbznzpl .gt_asterisk {
+  font-size: 100%;
+  vertical-align: 0;
+}
+
+#bpsqbznzpl .gt_indent_1 {
+  text-indent: 5px;
+}
+
+#bpsqbznzpl .gt_indent_2 {
+  text-indent: 10px;
+}
+
+#bpsqbznzpl .gt_indent_3 {
+  text-indent: 15px;
+}
+
+#bpsqbznzpl .gt_indent_4 {
+  text-indent: 20px;
+}
+
+#bpsqbznzpl .gt_indent_5 {
+  text-indent: 25px;
+}
+
+#bpsqbznzpl .katex-display {
+  display: inline-flex !important;
+  margin-bottom: 0.75em !important;
+}
+
+#bpsqbznzpl div.Reactable > div.rt-table > div.rt-thead > div.rt-tr.rt-tr-group-header > div.rt-th-group:after {
+  height: 0px !important;
+}
+</style>
+
+<table class="gt_table caption-top table table-sm table-striped small" data-quarto-bootstrap="false">
+<thead>
+<tr class="gt_heading header">
+<td colspan="2" class="gt_heading gt_title gt_font_normal gt_bottom_border">Average Rating of Individuals</td>
+</tr>
+<tr class="gt_col_headings even">
+<th id="name" class="gt_col_heading gt_columns_bottom_border gt_left" data-quarto-table-cell-role="th" scope="col">name</th>
+<th id="Avg-Rating" class="gt_col_heading gt_columns_bottom_border gt_right" data-quarto-table-cell-role="th" scope="col">Avg Rating</th>
+</tr>
+</thead>
+<tbody class="gt_table_body">
+<tr class="odd">
+<td class="gt_row gt_left" headers="name">Alan</td>
+<td class="gt_row gt_right" headers="Avg Rating">4.333333</td>
+</tr>
+<tr class="even">
+<td class="gt_row gt_left" headers="name">Dylan</td>
+<td class="gt_row gt_right" headers="Avg Rating">4.400000</td>
+</tr>
+<tr class="odd">
+<td class="gt_row gt_left" headers="name">Ethan</td>
+<td class="gt_row gt_right" headers="Avg Rating">4.333333</td>
+</tr>
+<tr class="even">
+<td class="gt_row gt_left" headers="name">Jonah</td>
+<td class="gt_row gt_right" headers="Avg Rating">3.750000</td>
+</tr>
+<tr class="odd">
+<td class="gt_row gt_left" headers="name">Mark</td>
+<td class="gt_row gt_right" headers="Avg Rating">3.666667</td>
+</tr>
+</tbody>
+</table>
+
+</div>
+</div>
+</div>
+<p>We can try to create a graphic as well of the reviews. We can take the sum of each rating for shows and divide by the max score to normalize the rating. Previously we ignored null values but now they will be taken into account.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb14"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a>max_score <span class="ot">=</span> <span class="dv">25</span> <span class="co"># 5 users, 5 highest review, 5*5</span></span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>df_ratings_normalized<span class="ot">&lt;-</span>df_group_title <span class="sc">%&gt;%</span> <span class="fu">summarize</span>(</span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">Normalized_Rating =</span> <span class="fu">sum</span>(review, <span class="at">na.rm =</span> <span class="cn">TRUE</span>)<span class="sc">/</span>max_score</span>
+<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a><span class="fu">gt</span>(df_ratings_normalized) <span class="sc">%&gt;%</span> <span class="fu">tab_header</span>(</span>
+<span id="cb14-8"><a href="#cb14-8" aria-hidden="true" tabindex="-1"></a>      <span class="at">title =</span> <span class="fu">md</span>(<span class="st">"Normalized Show"</span>)</span>
+<span id="cb14-9"><a href="#cb14-9" aria-hidden="true" tabindex="-1"></a>      )</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div id="ectrwgiksb" style="padding-left:0px;padding-right:0px;padding-top:10px;padding-bottom:10px;overflow-x:auto;overflow-y:auto;width:auto;height:auto;">
+<style>#ectrwgiksb table {
+  font-family: system-ui, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#ectrwgiksb thead, #ectrwgiksb tbody, #ectrwgiksb tfoot, #ectrwgiksb tr, #ectrwgiksb td, #ectrwgiksb th {
+  border-style: none;
+}
+
+#ectrwgiksb p {
+  margin: 0;
+  padding: 0;
+}
+
+#ectrwgiksb .gt_table {
+  display: table;
+  border-collapse: collapse;
+  line-height: normal;
+  margin-left: auto;
+  margin-right: auto;
+  color: #333333;
+  font-size: 16px;
+  font-weight: normal;
+  font-style: normal;
+  background-color: #FFFFFF;
+  width: auto;
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #A8A8A8;
+  border-right-style: none;
+  border-right-width: 2px;
+  border-right-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #A8A8A8;
+  border-left-style: none;
+  border-left-width: 2px;
+  border-left-color: #D3D3D3;
+}
+
+#ectrwgiksb .gt_caption {
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+
+#ectrwgiksb .gt_title {
+  color: #333333;
+  font-size: 125%;
+  font-weight: initial;
+  padding-top: 4px;
+  padding-bottom: 4px;
+  padding-left: 5px;
+  padding-right: 5px;
+  border-bottom-color: #FFFFFF;
+  border-bottom-width: 0;
+}
+
+#ectrwgiksb .gt_subtitle {
+  color: #333333;
+  font-size: 85%;
+  font-weight: initial;
+  padding-top: 3px;
+  padding-bottom: 5px;
+  padding-left: 5px;
+  padding-right: 5px;
+  border-top-color: #FFFFFF;
+  border-top-width: 0;
+}
+
+#ectrwgiksb .gt_heading {
+  background-color: #FFFFFF;
+  text-align: center;
+  border-bottom-color: #FFFFFF;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+}
+
+#ectrwgiksb .gt_bottom_border {
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+}
+
+#ectrwgiksb .gt_col_headings {
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+}
+
+#ectrwgiksb .gt_col_heading {
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: normal;
+  text-transform: inherit;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+  vertical-align: bottom;
+  padding-top: 5px;
+  padding-bottom: 6px;
+  padding-left: 5px;
+  padding-right: 5px;
+  overflow-x: hidden;
+}
+
+#ectrwgiksb .gt_column_spanner_outer {
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: normal;
+  text-transform: inherit;
+  padding-top: 0;
+  padding-bottom: 0;
+  padding-left: 4px;
+  padding-right: 4px;
+}
+
+#ectrwgiksb .gt_column_spanner_outer:first-child {
+  padding-left: 0;
+}
+
+#ectrwgiksb .gt_column_spanner_outer:last-child {
+  padding-right: 0;
+}
+
+#ectrwgiksb .gt_column_spanner {
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  vertical-align: bottom;
+  padding-top: 5px;
+  padding-bottom: 5px;
+  overflow-x: hidden;
+  display: inline-block;
+  width: 100%;
+}
+
+#ectrwgiksb .gt_spanner_row {
+  border-bottom-style: hidden;
+}
+
+#ectrwgiksb .gt_group_heading {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: initial;
+  text-transform: inherit;
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+  vertical-align: middle;
+  text-align: left;
+}
+
+#ectrwgiksb .gt_empty_group_heading {
+  padding: 0.5px;
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: initial;
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  vertical-align: middle;
+}
+
+#ectrwgiksb .gt_from_md > :first-child {
+  margin-top: 0;
+}
+
+#ectrwgiksb .gt_from_md > :last-child {
+  margin-bottom: 0;
+}
+
+#ectrwgiksb .gt_row {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+  margin: 10px;
+  border-top-style: solid;
+  border-top-width: 1px;
+  border-top-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+  vertical-align: middle;
+  overflow-x: hidden;
+}
+
+#ectrwgiksb .gt_stub {
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: initial;
+  text-transform: inherit;
+  border-right-style: solid;
+  border-right-width: 2px;
+  border-right-color: #D3D3D3;
+  padding-left: 5px;
+  padding-right: 5px;
+}
+
+#ectrwgiksb .gt_stub_row_group {
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: initial;
+  text-transform: inherit;
+  border-right-style: solid;
+  border-right-width: 2px;
+  border-right-color: #D3D3D3;
+  padding-left: 5px;
+  padding-right: 5px;
+  vertical-align: top;
+}
+
+#ectrwgiksb .gt_row_group_first td {
+  border-top-width: 2px;
+}
+
+#ectrwgiksb .gt_row_group_first th {
+  border-top-width: 2px;
+}
+
+#ectrwgiksb .gt_summary_row {
+  color: #333333;
+  background-color: #FFFFFF;
+  text-transform: inherit;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+}
+
+#ectrwgiksb .gt_first_summary_row {
+  border-top-style: solid;
+  border-top-color: #D3D3D3;
+}
+
+#ectrwgiksb .gt_first_summary_row.thick {
+  border-top-width: 2px;
+}
+
+#ectrwgiksb .gt_last_summary_row {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+}
+
+#ectrwgiksb .gt_grand_summary_row {
+  color: #333333;
+  background-color: #FFFFFF;
+  text-transform: inherit;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+}
+
+#ectrwgiksb .gt_first_grand_summary_row {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+  border-top-style: double;
+  border-top-width: 6px;
+  border-top-color: #D3D3D3;
+}
+
+#ectrwgiksb .gt_last_grand_summary_row_top {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+  border-bottom-style: double;
+  border-bottom-width: 6px;
+  border-bottom-color: #D3D3D3;
+}
+
+#ectrwgiksb .gt_striped {
+  background-color: rgba(128, 128, 128, 0.05);
+}
+
+#ectrwgiksb .gt_table_body {
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+}
+
+#ectrwgiksb .gt_footnotes {
+  color: #333333;
+  background-color: #FFFFFF;
+  border-bottom-style: none;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 2px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 2px;
+  border-right-color: #D3D3D3;
+}
+
+#ectrwgiksb .gt_footnote {
+  margin: 0px;
+  font-size: 90%;
+  padding-top: 4px;
+  padding-bottom: 4px;
+  padding-left: 5px;
+  padding-right: 5px;
+}
+
+#ectrwgiksb .gt_sourcenotes {
+  color: #333333;
+  background-color: #FFFFFF;
+  border-bottom-style: none;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 2px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 2px;
+  border-right-color: #D3D3D3;
+}
+
+#ectrwgiksb .gt_sourcenote {
+  font-size: 90%;
+  padding-top: 4px;
+  padding-bottom: 4px;
+  padding-left: 5px;
+  padding-right: 5px;
+}
+
+#ectrwgiksb .gt_left {
+  text-align: left;
+}
+
+#ectrwgiksb .gt_center {
+  text-align: center;
+}
+
+#ectrwgiksb .gt_right {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+#ectrwgiksb .gt_font_normal {
+  font-weight: normal;
+}
+
+#ectrwgiksb .gt_font_bold {
+  font-weight: bold;
+}
+
+#ectrwgiksb .gt_font_italic {
+  font-style: italic;
+}
+
+#ectrwgiksb .gt_super {
+  font-size: 65%;
+}
+
+#ectrwgiksb .gt_footnote_marks {
+  font-size: 75%;
+  vertical-align: 0.4em;
+  position: initial;
+}
+
+#ectrwgiksb .gt_asterisk {
+  font-size: 100%;
+  vertical-align: 0;
+}
+
+#ectrwgiksb .gt_indent_1 {
+  text-indent: 5px;
+}
+
+#ectrwgiksb .gt_indent_2 {
+  text-indent: 10px;
+}
+
+#ectrwgiksb .gt_indent_3 {
+  text-indent: 15px;
+}
+
+#ectrwgiksb .gt_indent_4 {
+  text-indent: 20px;
+}
+
+#ectrwgiksb .gt_indent_5 {
+  text-indent: 25px;
+}
+
+#ectrwgiksb .katex-display {
+  display: inline-flex !important;
+  margin-bottom: 0.75em !important;
+}
+
+#ectrwgiksb div.Reactable > div.rt-table > div.rt-thead > div.rt-tr.rt-tr-group-header > div.rt-th-group:after {
+  height: 0px !important;
+}
+</style>
+
+<table class="gt_table caption-top table table-sm table-striped small" data-quarto-bootstrap="false">
+<thead>
+<tr class="gt_heading header">
+<td colspan="2" class="gt_heading gt_title gt_font_normal gt_bottom_border">Normalized Show</td>
+</tr>
+<tr class="gt_col_headings even">
+<th id="title" class="gt_col_heading gt_columns_bottom_border gt_left" data-quarto-table-cell-role="th" scope="col">title</th>
+<th id="Normalized_Rating" class="gt_col_heading gt_columns_bottom_border gt_right" data-quarto-table-cell-role="th" scope="col">Normalized_Rating</th>
+</tr>
+</thead>
+<tbody class="gt_table_body">
+<tr class="odd">
+<td class="gt_row gt_left" headers="title">Attack on Titan</td>
+<td class="gt_row gt_right" headers="Normalized_Rating">0.48</td>
+</tr>
+<tr class="even">
+<td class="gt_row gt_left" headers="title">Breaking Bad</td>
+<td class="gt_row gt_right" headers="Normalized_Rating">0.76</td>
+</tr>
+<tr class="odd">
+<td class="gt_row gt_left" headers="title">Demon Slayer</td>
+<td class="gt_row gt_right" headers="Normalized_Rating">0.60</td>
+</tr>
+<tr class="even">
+<td class="gt_row gt_left" headers="title">Dexter</td>
+<td class="gt_row gt_right" headers="Normalized_Rating">0.32</td>
+</tr>
+<tr class="odd">
+<td class="gt_row gt_left" headers="title">Dragonball Z</td>
+<td class="gt_row gt_right" headers="Normalized_Rating">0.36</td>
+</tr>
+<tr class="even">
+<td class="gt_row gt_left" headers="title">Invincible</td>
+<td class="gt_row gt_right" headers="Normalized_Rating">0.44</td>
+</tr>
+</tbody>
+</table>
+
+</div>
+</div>
+</div>
+<p>Create the graph,</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb15"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a>df_ratings_normalized  <span class="sc">%&gt;%</span> </span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">x =</span> title, <span class="at">y =</span> Normalized_Rating)) <span class="sc">+</span></span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>    <span class="fu">geom_bar</span>(<span class="at">width =</span> <span class="fl">0.5</span>, <span class="at">stat =</span> <span class="st">'identity'</span>) <span class="sc">+</span> </span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>    <span class="fu">coord_flip</span>() <span class="sc">+</span> </span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>    <span class="fu">labs</span>(</span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a>      <span class="at">x =</span> <span class="st">"Show Name"</span>,     </span>
+<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a>      <span class="at">title =</span> <span class="st">"Normalized Show Ratings"</span></span>
+<span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-9"><a href="#cb15-9" aria-hidden="true" tabindex="-1"></a>    )</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="607_2A_DylanGold_files/figure-html/unnamed-chunk-8-1.png" class="img-fluid figure-img" width="672"></p>
+</figure>
+</div>
+</div>
+</div>
+</section>
+<section id="conclusion" class="level2">
+<h2 class="anchored" data-anchor-id="conclusion">Conclusion</h2>
+<p>In this assignment I was able to practice my SQL skills and use postgreSQL for the first time. By creating 3 tables separately, then later joining them together using their foriegn keys I was able to create a table that had its essential information. I was able to export this table into an csv where I was able to run some analysis on it from R. I generated some tables and graphs from this data while dealing with null values by initially using na.rm to remove them, and at the end normalizing the data to account for the null values.</p>
+<p>Some are some ways I could further work on this topic. For example I could get a lot more data by automating the polling. Polling manually was pretty bad. Sites/Programs that make polls are able to export into a csv. I could then insert the data from files rather than manually typing values.</p>
+</section>
 </section>
 
 </main>

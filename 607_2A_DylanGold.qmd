@@ -11,3 +11,183 @@ editor: visual
 In this assignment we are loading a SQL database into R after populating it with our data about ratings of media 1-5 that we collect. I will collect the data by asking some people in real life, maybe if I have time Ill make a google forum then post it somewhere. I will probably use movies or a show or videos games as the topic. I will be sure to take down if they have not consumed the media in my data set. After populating a postgreSQL database I will probably export it into a csv to work with in R.
 
 Even through its seems like overkill to use relational database structure for this I will do it for the assignment. I will have 2 tables, users(user_id, name) and ratings(user_id, media, rating)
+
+# Codebase:
+
+## Getting Started
+
+Initially I was thinking about using a survey and I posted one somewhere but after checking in a bit 0 people responded. I then went to ask my friends what they thought about some shows that I am curious about or that I think are popular and I ended up getting a few responses.
+
+## Planning the SQL schema.
+
+After gather the results I basically had a name, show, and rating for 5 different people. Rating could be null I will create 3 tables to show this. users(user_id, name), reviews(review_id, rating,show_id, user_id), shows(show_id, title). The user_id will be the primary key for the users as well as a foreign key for the reviews. The show_id will be the primary key for the shows as well as a foreign key for reviews. The review_id will be the primary key for the reviews. This is the schema suggested in the assignment. I wanted to shorten it to 2 tables but it just made more sense to make 3 tables due to the many to many relationship aswell as possiblity for duplicate names and such.
+
+## Creating the SQL tables
+
+The following lines of SQL code were used to create my tables based on the information above. I struggled a little because I did not know about serial and I was trying to use AUTO_INCREMENT from my previous experience.
+
+```{}
+CREATE TABLE users(
+    user_id SERIAL PRIMARY KEY,
+    name varchar(20) NOT NULL
+);
+CREATE TABLE shows(
+    show_id SERIAL PRIMARY KEY,
+    title varchar(100) NOT NULL
+);
+CREATE TABLE reviews(
+    review_id SERIAL PRIMARY KEY,
+    user_id INT REFERENCES users(user_id),
+    show_id INT REFERENCES shows(show_id),
+    review INT 
+);
+```
+
+## Inserting Data
+
+I then inserted the information for the shows and users tables with the following code.
+
+```         
+INSERT INTO users(name) VALUES ('Jonah'), ('Ethan'), ('Alan'), ('Dylan'), ('Mark');
+
+INSERT INTO shows(title) VALUES ('Demon Slayer'), ('Breaking Bad'), ('Attack on Titan'), ('Dexter'), ('Invincible'), ('Dragonball Z');
+```
+
+Then I inserted the data for everyone's reviews, this was pretty tedious because I did it manually.
+If someone did not see a show yet I did not insert a review at this stage. It seemed reasonable to not insert a review for our null values. 
+We could create null values later in R if we wanted. Because I manually inserted the information it made a lot of sense to just skip those values.
+
+```{}
+INSERT INTO reviews(user_id, show_id, review)
+VALUES 
+(1, 1, 3),
+(1, 2, 5),
+(1, 3, 3), 
+(1, 5, 4), 
+(2, 1, 4), 
+(2, 2, 5), 
+(2, 4, 4),
+(3, 1, 4), 
+(3, 3, 4), 
+(3, 6, 5),
+(4, 1, 4),
+(4, 2, 5),
+(4, 3, 5),
+(4, 4, 4),
+(4, 5, 4),
+(5, 2, 4),
+(5, 5, 3),
+(5, 6, 4);
+```
+
+Now that I had the table I need to create a query that would join the tables back together, then copy it to a csv that I could export to github and bring here to display in R. I use the JOIN statements to join the tables for this query I use an inner join and I join on the foreign keys that I mentioned earlier. I can use USING because they are the same name in the tables.
+
+I want to display the name, title, and review. 
+
+```{}
+SELECT name, title, review
+FROM reviews
+INNER JOIN users USING(user_id)
+INNER JOIN shows USING(show_id);
+```
+
+Once the table shows up I click on the "Save results to file" button in the Data Output section of pgAdmin. I then save the results to this directory under ReviewData.csv.
+
+
+## R Analysis
+
+We now have the csv that we can generate graphics for and such. I will first load the library
+```{r , message=FALSE, warning=FALSE}
+library(tidyverse)
+library(ggplot2)
+library(gt)
+library(tidyr) #For the complete function used later
+```
+
+As well as load in the csv.
+``` {r}
+url <- "https://raw.githubusercontent.com/DylanGoldJ/607-Assignment-2/refs/heads/main/ReviewData.csv"
+df <- read_csv(
+  file = url,
+  show_col_types = FALSE
+)
+
+head(df, 10)
+```
+
+We can use a function from tidyr to complete our data given how our csv does not have a lot of the reviews.
+```{r}
+df <- df %>% complete(name, title)
+df
+```
+
+We see our review data is now in R to further explore.
+Lets start off with grouping the data both by name and by title.
+```{r}
+df_group_title <- df %>% group_by(title) 
+df_group_name <- df %>% group_by(name)
+df_group_title 
+```
+According to ?group_by(), the data will display the same but now we can run certain functions based on the grouping
+I will get the average rating of each show. Then we can sort it as well. We also set the removal of na to true otherwise we would get NA.
+We can also sort it by Avg Rating.
+```{r}
+df_group_title_avg <-df_group_title %>% summarize(
+  'Avg Rating' = mean(review, na.rm = TRUE)
+  )
+
+
+gt(df_group_title_avg) %>% tab_header(
+      title = md("Average Rating of Shows")
+      )
+```
+
+We can also see each persons average score
+``` {r}
+df_group_name_avg <-df_group_name %>% summarize(
+'Avg Rating' = mean(review, na.rm = TRUE)
+)
+
+
+gt(df_group_name_avg) %>% tab_header(
+      title = md("Average Rating of Individuals")
+      )
+``` 
+
+
+We can try to create a graphic as well of the reviews. We can take the sum of each rating for shows and divide by the max score to normalize the rating. Previously we ignored null values but now they will be taken into account.
+
+``` {r}
+max_score = 25 # 5 users, 5 highest review, 5*5
+
+df_ratings_normalized<-df_group_title %>% summarize(
+  Normalized_Rating = sum(review, na.rm = TRUE)/max_score
+)
+
+gt(df_ratings_normalized) %>% tab_header(
+      title = md("Normalized Show")
+      )
+```
+Create the graph, 
+```{r}
+df_ratings_normalized  %>% 
+  ggplot(aes(x = title, y = Normalized_Rating)) +
+    geom_bar(width = 0.5, stat = 'identity') + 
+    coord_flip() + 
+    labs(
+      x = "Show Name",     
+      title = "Normalized Show Ratings"
+
+    )
+  
+```
+
+## Conclusion
+In this assignment I was able to practice my SQL skills and use postgreSQL for the first time. By creating 3 tables separately, then later joining them together using their foriegn keys I was able to create a table that had its essential information. I was able to export this table into an csv where I was able to run some analysis on it from R. I generated some tables and graphs from this data while dealing with null values by initially using na.rm to remove them, and at the end normalizing the data to account for the null values. 
+
+Some are some ways I could further work on this topic. For example I could get a lot more data by automating the polling. Polling manually was pretty bad. Sites/Programs that make polls are able to export into a csv. I could then insert the data from files rather than manually typing values. 
+
+
+
+
+
